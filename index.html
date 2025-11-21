@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Simple Archive — GitHub Pages</title>
+
+<!-- CONFIG: change these -->
+<script>
+  const CONFIG = {
+    GITHUB_USER: "clouder1122",        // <-- your GitHub username
+    GITHUB_REPO: "",            // <-- your repo name
+    ROOT_FOLDER: "/",                     // <-- folder inside repo or "" for root
+    TITLE: "Simple Archive",             // <-- site title
+    LOGO_URL: "",                        // <-- optional logo url (leave blank for text)
+    GITHUB_TOKEN: ""                     // <-- optional: GitHub Personal Access Token (not for public commits)
+  };
+</script>
+
+<!-- Styles: Blue + White light theme; Blue + Black dark theme -->
+<style>
+  :root{
+    --blue-500:#2b6fd6;
+    --blue-600:#255cc0;
+    --bg:#f7fbff;
+    --panel:#ffffff;
+    --muted:#6b7280;
+    --text:#0f1724;
+    --accent:var(--blue-500);
+    --shadow: 0 6px 18px rgba(16,24,40,0.06);
+    --radius:12px;
+  }
+  [data-theme="dark"]{
+    --bg:#071023;
+    --panel:#07131f;
+    --muted:#9aa4b2;
+    --text:#e6f0ff;
+    --accent:#3b82f6;
+    --shadow: 0 6px 24px rgba(0,0,0,0.6);
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+  .app{display:flex;height:100vh;gap:18px;padding:18px}
+  .sidebar{width:320px;background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden}
+  .logo{display:flex;align-items:center;gap:12px;padding:16px 16px 6px 16px;border-bottom:1px solid rgba(0,0,0,0.04)}
+  .logo img{width:44px;height:44px;border-radius:8px;object-fit:cover}
+  .logo .title{font-weight:700;font-size:18px}
+  .controls{padding:12px 16px;border-bottom:1px solid rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:10px}
+  .search{display:flex;gap:8px}
+  .search input{flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);background:transparent;outline:none;color:var(--text)}
+  .select{padding:8px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);background:transparent;color:var(--text)}
+  .filters{display:flex;gap:8px;align-items:center}
+  .toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border-radius:8px}
+  .list{overflow:auto;padding:8px;background:linear-gradient(180deg,transparent, rgba(0,0,0,0.02));flex:1}
+  .folder, .file{padding:10px;border-radius:8px;margin:6px 6px;display:flex;align-items:center;gap:12px;cursor:pointer}
+  .file:hover,.folder:hover{background:rgba(43,111,214,0.06)}
+  .meta{font-size:12px;color:var(--muted)}
+  .file .name{font-weight:600}
+  .file .size{margin-left:auto;font-size:12px;color:var(--muted)}
+  .content{flex:1;display:flex;flex-direction:column;gap:12px}
+  .content-card{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;overflow:auto}
+  .breadcrumb{font-size:13px;color:var(--muted);margin-bottom:8px}
+  .preview{display:flex;flex-direction:column;gap:10px}
+  .preview .badges{display:flex;gap:8px;align-items:center}
+  .btn{background:var(--accent);color:#fff;padding:8px 12px;border-radius:10px;text-decoration:none;display:inline-block}
+  .inline{display:inline-flex;gap:8px;align-items:center}
+  .preview iframe{width:100%;height:640px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)}
+  pre{background:rgba(0,0,0,0.03);padding:12px;border-radius:8px;overflow:auto}
+  .row{display:flex;gap:12px;align-items:center}
+  .empty{padding:36px;text-align:center;color:var(--muted)}
+  .small{font-size:13px;color:var(--muted)}
+  .sort-btn{padding:8px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);background:transparent;cursor:pointer}
+  footer.small{font-size:12px;color:var(--muted);padding:8px;text-align:center}
+  @media (max-width:900px){
+    .sidebar{width:100%;height:46vh}
+    .app{flex-direction:column;padding:12px}
+    .content{height:calc(54vh - 24px)}
+  }
+</style>
+
+<!-- External libs: marked for markdown, highlight.js for code highlighting -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/5.1.1/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+
+</head>
+<body data-theme="light">
+<div class="app">
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="logo">
+      <div id="logoWrap">
+        <!-- logo inserted by JS -->
+      </div>
+      <div>
+        <div class="title" id="siteTitle"></div>
+        <div class="small">Hosted on GitHub Pages — admin uploads via GitHub</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="search">
+        <input id="searchInput" placeholder="Search files and folders..." />
+        <button class="select sort-btn" id="clearBtn" title="Clear">✖</button>
+      </div>
+      <div class="filters">
+        <select id="sortSelect" class="select" title="Sort">
+          <option value="name-asc">Name ↑</option>
+          <option value="name-desc">Name ↓</option>
+          <option value="size-desc">Size ↓</option>
+          <option value="size-asc">Size ↑</option>
+          <option value="time-desc">Date ↓</option>
+          <option value="time-asc">Date ↑</option>
+        </select>
+        <div style="flex:1"></div>
+        <div class="toggle" id="themeToggle" title="Toggle dark mode">🌙</div>
+      </div>
+    </div>
+
+    <div id="listContainer" class="list">
+      <div id="fileList">Loading files…</div>
+    </div>
+
+    <footer class="small">Tip: Put files into the repo's <code>root</code> (or configure ROOT_FOLDER above).</footer>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="content">
+    <div class="content-card">
+      <div class="breadcrumb" id="breadcrumb">/</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <h2 id="fileTitle">Select a file to preview</h2>
+          <div class="small" id="fileMeta">Files are read-only — admin manages uploads on GitHub.</div>
+        </div>
+        <div id="actions" class="inline"></div>
+      </div>
+
+      <div id="previewArea" class="preview">
+        <div class="empty" id="emptyPane">No file selected — pick a file from the left.</div>
+        <div id="previewPane" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JS: core logic -->
+<script>
+(async function(){
+  // ----------------- CONFIG -------------------
+  const USER = CONFIG.GITHUB_USER.trim();
+  const REPO = CONFIG.GITHUB_REPO.trim();
+  const ROOT = CONFIG.ROOT_FOLDER.replace(/^\/|\/$/g, ''); // normalized
+  const TITLE = CONFIG.TITLE || 'Simple Archive';
+  const LOGO_URL = CONFIG.LOGO_URL || '';
+  const TOKEN = CONFIG.GITHUB_TOKEN || '';
+
+  if(!USER || !REPO){
+    document.getElementById('fileList').innerHTML = '<div class="empty">Please set GITHUB_USER and GITHUB_REPO near the top of the file.</div>';
+    return;
+  }
+
+  // DOM shortcuts
+  const siteTitle = document.getElementById('siteTitle');
+  const logoWrap = document.getElementById('logoWrap');
+  const fileListEl = document.getElementById('fileList');
+  const breadcrumb = document.getElementById('breadcrumb');
+  const fileTitle = document.getElementById('fileTitle');
+  const fileMeta = document.getElementById('fileMeta');
+  const previewPane = document.getElementById('previewPane');
+  const previewArea = document.getElementById('previewArea');
+  const emptyPane = document.getElementById('emptyPane');
+  const actions = document.getElementById('actions');
+  const searchInput = document.getElementById('searchInput');
+  const sortSelect = document.getElementById('sortSelect');
+  const themeToggle = document.getElementById('themeToggle');
+  const clearBtn = document.getElementById('clearBtn');
+
+  siteTitle.textContent = TITLE;
+  if(LOGO_URL){
+    logoWrap.innerHTML = `<img src="${LOGO_URL}" alt="logo">`;
+  } else {
+    logoWrap.innerHTML = `<div style="width:44px;height:44px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">${TITLE.slice(0,2).toUpperCase()}</div>`;
+  }
+
+  // theme toggle
+  function setTheme(t){ document.body.setAttribute('data-theme', t); localStorage.setItem('theme', t); themeToggle.textContent = t==='dark' ? '☀️' : '🌙'; }
+  const saved = localStorage.getItem('theme') || 'light';
+  setTheme(saved);
+  themeToggle.onclick = ()=> setTheme(document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+
+  // GitHub API helpers
+  const API_BASE = 'https://api.github.com';
+  const headers = TOKEN ? { Authorization: 'token ' + TOKEN } : {};
+  async function api(path){
+    const url = `${API_BASE}/repos/${USER}/${REPO}/contents/${path}`;
+    const res = await fetch(url, { headers });
+    if(!res.ok){
+      const txt = await res.text();
+      throw new Error(`GitHub API error ${res.status}: ${txt}`);
+    }
+    return res.json();
+  }
+
+  // state
+  let currentPath = ROOT || '';
+  let itemsCache = {}; // path => items
+  let allFilesFlat = []; // flattened file list for search/sort
+  let currentItems = [];
+
+  // utility formatting
+  function formatBytes(n){
+    if(n === undefined || n === null) return '—';
+    if(n === 0) return '0 B';
+    const units = ['B','KB','MB','GB','TB'];
+    let i = Math.floor(Math.log(n)/Math.log(1024));
+    if(i<0) i=0;
+    return (n/Math.pow(1024,i)).toFixed(i===0?0:2) + ' ' + units[i];
+  }
+  function timeAgo(ms){
+    const d = new Date(ms);
+    return d.toLocaleString();
+  }
+  function escapeHtml(s){ return (s+'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // fetch and build tree
+  async function loadPath(path){
+    try{
+      fileListEl.innerHTML = `<div class="small">Loading…</div>`;
+      const raw = await api(path || '');
+      // raw is array for folder, or single object for file
+      const items = Array.isArray(raw) ? raw : [raw];
+      // We only care about files and directories
+      const mapped = items.map(i=>({
+        name: i.name,
+        path: i.path,
+        type: i.type, // 'file' or 'dir'
+        size: i.size || 0,
+        sha: i.sha,
+        url: i.url,
+        download_url: i.download_url || null,
+        git_url: i.git_url || null
+      }));
+      itemsCache[path || 'root'] = mapped;
+      currentItems = mapped;
+      buildFileList(mapped);
+      // also flatten to allFilesFlat for search (we'll lazy-load folders)
+      // note: we keep only files present under here; a full repo crawl is expensive.
+    }catch(err){
+      fileListEl.innerHTML = `<div class="empty">Failed to load files: ${escapeHtml(err.message)}</div>`;
+      console.error(err);
+    }
+  }
+
+  // recursively load folder tree for root to show tree-like list (only first-level recursion for performance)
+  async function buildFileList(items){
+    // render folders first then files
+    const folders = items.filter(i=>i.type==='dir').sort((a,b)=>a.name.localeCompare(b.name));
+    const files = items.filter(i=>i.type==='file').sort((a,b)=>a.name.localeCompare(b.name));
+
+    // If we are at root and ROOT specified, show breadcrumb accordingly
+    breadcrumb.textContent = '/' + (currentPath||'');
+    fileListEl.innerHTML = '';
+
+    // Show Up / Parent if not at root
+    if((ROOT && currentPath !== ROOT) || (!ROOT && currentPath !== '')) {
+      const up = document.createElement('div');
+      up.className='folder';
+      up.innerHTML = '⬆️ .. (Parent)';
+      up.onclick = ()=> {
+        // go to parent path
+        const parts = currentPath.split('/').filter(Boolean);
+        parts.pop();
+        currentPath = parts.join('/');
+        loadPath(currentPath);
+      };
+      fileListEl.appendChild(up);
+    }
+
+    // Folders
+    for(const f of folders){
+      const el = document.createElement('div');
+      el.className='folder';
+      el.innerHTML = `<div style="width:28px;text-align:center">📁</div><div><div class="name">${escapeHtml(f.name)}</div><div class="meta">${f.path}</div></div>`;
+      el.onclick = async ()=> {
+        currentPath = f.path;
+        await loadPath(currentPath);
+      };
+      fileListEl.appendChild(el);
+    }
+
+    // Files
+    for(const file of files){
+      const el = document.createElement('div');
+      el.className='file';
+      const ext = file.name.split('.').pop().toLowerCase();
+      const icon = iconForExt(ext);
+      el.innerHTML = `<div style="width:28px;text-align:center">${icon}</div>
+                      <div style="flex:1">
+                        <div class="name">${escapeHtml(file.name)}</div>
+                        <div class="meta">${escapeHtml(file.path)}</div>
+                      </div>
+                      <div class="size">${formatBytes(file.size)}</div>`;
+      el.onclick = ()=> showFile(file);
+      fileListEl.appendChild(el);
+    }
+
+    // Save flat list for search/sort limited to currently loaded folder
+    allFilesFlat = files.map(f=>({...f}));
+    applySortAndFilter();
+  }
+
+  // icon helper
+  function iconForExt(ext){
+    const imgs = ['png','jpg','jpeg','gif','webp','svg'];
+    const text = ['txt','md','markdown','csv','log'];
+    const pdf = ['pdf'];
+    const audio = ['mp3','wav','ogg','m4a'];
+    const video = ['mp4','webm','ogg','mov','mkv'];
+    const archives = ['zip','rar','7z','tar','gz'];
+    const code = ['js','ts','py','java','c','cpp','css','html','json','yml','yaml','sh','rb','go','rs'];
+
+    if(imgs.includes(ext)) return '🖼️';
+    if(text.includes(ext)) return '📄';
+    if(pdf.includes(ext)) return '📕';
+    if(audio.includes(ext)) return '🎵';
+    if(video.includes(ext)) return '🎬';
+    if(archives.includes(ext)) return '🗜️';
+    if(code.includes(ext)) return '💻';
+    return '📁';
+  }
+
+  // show file info + preview
+  async function showFile(file){
+    fileTitle.textContent = file.name;
+    fileMeta.innerHTML = `<div class="small">Path: <code>${escapeHtml(file.path)}</code> • Size: ${formatBytes(file.size)} • SHA: ${file.sha||'—'}</div>`;
+    actions.innerHTML = `<a class="btn" href="${file.download_url}" target="_blank" rel="noopener">Download</a>`;
+
+    // prepare preview
+    emptyPane.style.display='none';
+    previewPane.style.display='block';
+    previewPane.innerHTML = `<div class="small">Preparing preview…</div>`;
+
+    try {
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      const raw = file.download_url;
+
+      // Images
+      const imageTypes = ['png','jpg','jpeg','gif','webp','svg'];
+      if(imageTypes.includes(ext)){
+        previewPane.innerHTML = `<img style="max-width:100%;border-radius:8px;box-shadow:var(--shadow)" src="${raw}" alt="${escapeHtml(file.name)}">`;
+        return;
+      }
+
+      // PDF
+      if(ext === 'pdf'){
+        previewPane.innerHTML = `<iframe src="${raw}"></iframe>`;
+        return;
+      }
+
+      // Audio
+      const audioTypes = ['mp3','wav','ogg','m4a'];
+      if(audioTypes.includes(ext)){
+        previewPane.innerHTML = `<audio controls style="width:100%"><source src="${raw}">Your browser does not support audio preview.</audio>`;
+        return;
+      }
+
+      // Video
+      const videoTypes = ['mp4','webm','ogg','mov'];
+      if(videoTypes.includes(ext)){
+        previewPane.innerHTML = `<video controls style="width:100%;max-height:640px;border-radius:8px"><source src="${raw}">Your browser does not support video preview.</video>`;
+        return;
+      }
+
+      // Markdown
+      if(['md','markdown'].includes(ext)){
+        const txt = await fetchRaw(file.download_url);
+        const html = marked.parse(txt);
+        previewPane.innerHTML = `<div style="padding:12px;line-height:1.5">${html}</div>`;
+        // highlight any code blocks
+        hljs.highlightAll();
+        return;
+      }
+
+      // Text / Code files
+      const textTypes = ['txt','log','csv','json','xml','yml','yaml','html','css','js','ts','py','java','c','cpp','rb','sh','go','rs'];
+      if(textTypes.includes(ext) || file.size < 200000){ // small binary fallback
+        const txt = await fetchRaw(file.download_url);
+        // try to pretty-print JSON
+        if(ext === 'json'){
+          try{ const parsed = JSON.stringify(JSON.parse(txt), null, 2); previewPane.innerHTML = `<pre><code class="language-json">${escapeHtml(parsed)}</code></pre>`; hljs.highlightAll(); return; } catch(e){}
+        }
+        previewPane.innerHTML = `<pre><code>${escapeHtml(txt)}</code></pre>`;
+        hljs.highlightAll();
+        return;
+      }
+
+      // Archives / unknown: show icon + download
+      previewPane.innerHTML = `<div style="padding:30px;text-align:center">
+        <div style="font-size:48px">🗜️</div>
+        <div class="small" style="margin-top:8px">Preview unavailable for this file type.</div>
+        <div style="margin-top:12px"><a class="btn" href="${raw}" target="_blank" rel="noopener">Download ${escapeHtml(file.name)}</a></div>
+      </div>`;
+    } catch(err){
+      previewPane.innerHTML = `<div class="empty">Failed to load preview: ${escapeHtml(err.message)}</div>`;
+      console.error(err);
+    }
+  }
+
+  async function fetchRaw(url){
+    const res = await fetch(url, { headers });
+    if(!res.ok) throw new Error('Failed to fetch: ' + res.status);
+    return await res.text();
+  }
+
+  // Search & Sort
+  function applySortAndFilter(){
+    const q = (searchInput.value || '').trim().toLowerCase();
+    let list = allFilesFlat.slice();
+
+    if(q){
+      list = list.filter(f => (f.name + ' ' + f.path).toLowerCase().includes(q));
+    }
+
+    const mode = sortSelect.value;
+    list.sort((a,b)=>{
+      if(mode.startsWith('name')){
+        const cmp = a.name.localeCompare(b.name);
+        return mode.endsWith('asc') ? cmp : -cmp;
+      } else if(mode.startsWith('size')){
+        return mode.endsWith('asc') ? (a.size - b.size) : (b.size - a.size);
+      } else if(mode.startsWith('time')){
+        // We don't have precise mtime from contents API for files in every case; sort by name fallback
+        return 0;
+      }
+      return 0;
+    });
+
+    // render into fileList (keep folders present in DOM above)
+    // We'll append filtered file nodes after existing folder nodes
+    // Remove previous file nodes
+    const folderNodes = Array.from(fileListEl.querySelectorAll('.folder'));
+    fileListEl.querySelectorAll('.file').forEach(n=>n.remove());
+
+    for(const file of list){
+      const el = document.createElement('div');
+      el.className='file';
+      const ext = file.name.split('.').pop().toLowerCase();
+      const icon = iconForExt(ext);
+      el.innerHTML = `<div style="width:28px;text-align:center">${icon}</div>
+                      <div style="flex:1">
+                        <div class="name">${escapeHtml(file.name)}</div>
+                        <div class="meta">${escapeHtml(file.path)}</div>
+                      </div>
+                      <div class="size">${formatBytes(file.size)}</div>`;
+      el.onclick = ()=> showFile(file);
+      fileListEl.appendChild(el);
+    }
+
+    if(list.length === 0){
+      const el = document.createElement('div');
+      el.className='empty';
+      el.textContent = 'No files found.';
+      fileListEl.appendChild(el);
+    }
+  }
+
+  // initial load
+  await loadPath(currentPath);
+
+  // events
+  searchInput.oninput = () => applySortAndFilter();
+  sortSelect.onchange = () => applySortAndFilter();
+  clearBtn.onclick = ()=>{ searchInput.value=''; applySortAndFilter(); };
+
+  // Expose a simple refresh for admin
+  window.refreshArchive = ()=> loadPath(currentPath);
+
+  // keyboard: press "/" to focus search
+  window.addEventListener('keydown', e=>{
+    if(e.key === '/' && document.activeElement !== searchInput){
+      e.preventDefault();
+      searchInput.focus();
+    }
+  });
+
+  // initial accessibility
+  // remove placeholder empty content when preview area has content
+})();
+</script>
+
+<!-- small footer -->
+<script>document.addEventListener('DOMContentLoaded', ()=>{ /* no-op */ });</script>
+</body>
+</html>
